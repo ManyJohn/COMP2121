@@ -1,0 +1,104 @@
+.include "m2560def.inc"
+.def temp = r16
+.def hundred = r17
+.def OFvalue = r18
+
+
+
+.macro clear
+	ldi YL,low(@0)
+	ldi YH,high(@0)
+	clr temp
+	st Y+,temp
+	st Y,temp
+.endmacro 
+
+
+.dseg
+halfsecond: .byte 2
+.cseg 
+
+rjmp start
+.org OVF0addr
+	jmp Time0OVR
+
+
+
+
+
+start:
+	clear halfsecond
+;set up stack pointer
+	ldi temp, HIGH(RAMEND)
+	out SPH,temp
+	ldi temp,LOW(RAMEND)
+	out SPL,temp
+;Set timer 0
+	clear halfsecond
+	ldi temp,0
+	out TCCR0A,temp
+	ldi temp,2
+	out TCCR0B,temp
+	ldi temp,(1<<TOIE0);
+	sts TIMSK0,temp;
+	sei
+;Set up the PWM
+	ldi temp,0XFF
+	OUT DDRE,temp
+
+	ldi temp,0XFF
+	mov OFvalue,temp
+	sts OCR3BL,temp
+	clr temp
+	sts OCR3BH,temp
+
+	ldi temp,(1<<CS30)
+	sts TCCR3B, temp
+	ldi temp,(1<<WGM30)|(1<<COM3B1)
+	STS TCCR3A,temp
+;set compare value
+	SEI
+	
+
+
+end:
+rjmp end
+
+
+
+
+Time0OVR:
+	in temp,SREG
+	push temp
+	push r24
+	push r25
+	push YL
+	push YH
+
+	lds r24,halfsecond
+	lds r25,halfsecond+1
+	adiw r24:r25,1
+
+compare_time:
+	cpi r24,low(953)
+	ldi temp,high(953)
+	cpc r25,temp
+	brne not_half_second_yet
+	clear halfsecond
+	subi OFvalue,10
+	sts OCR3BL,OFvalue
+	clr temp
+	sts OCR3BH,temp
+
+end_Time0OVR:
+	pop YH
+	pop YL 
+	pop r25
+	pop r24
+	pop temp
+	out SREG,temp
+	reti
+not_half_second_yet:
+	sts halfsecond,r24
+	sts halfsecond+1,r25
+	rjmp end_Time0OVR
