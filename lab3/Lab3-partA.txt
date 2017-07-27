@@ -1,0 +1,21 @@
+;
+; AssemblerApplication1.asm
+;
+; Created: 12/04/2017 1:27:25 PM
+; Author : Comp2121
+;
+.include "m2560def.inc"
+.equ pattern = 0xE5
+.def temp = r16
+
+
+; Replace with your application code
+start:
+	ser temp
+	out DDRC, temp;set it to output port 
+	ldi temp, pattern
+	out PORTC, temp
+
+end_loop: 
+	jmp end_loop
+

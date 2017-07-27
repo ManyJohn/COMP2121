@@ -1,0 +1,426 @@
+;
+; AssemblerApplication1.asm
+;
+; Created: 5/05/2017 6:32:21 PM
+ ;
+
+.include "m2560def.inc"
+
+.macro input_times_ten
+	mul input_num, ten_register
+	mov input_num,r0
+.endmacro
+
+
+.macro do_lcd_command
+	ldi r16, @0
+	rcall lcd_command
+	rcall lcd_wait
+.endmacro
+.macro do_lcd_data
+	ldi r16, @0
+	rcall lcd_data
+	rcall lcd_wait
+.endmacro
+
+.macro load_lcd_data
+	mov r16, @0
+	rcall lcd_data
+	rcall lcd_wait
+.endmacro
+
+.equ lcd_base = 0b00110000
+.equ COLIN = 0b00001111
+.equ COLOUT = 0b00001111
+.equ ROWIN = 0b11110000
+.equ ROWOUT = 0b11110000
+.equ ROWMSK =  0b00001111
+.equ COLMSK = 0b11110000
+
+;.def result_h_digit =r14
+;.def result_ten_digit = r15
+.def temp = r16
+.def row = r17
+.def col = r18
+.def key = r19
+.def led=r20
+.def digit_counter = r21
+.def input_num = r22
+.def result = r23
+.def ten_register = r15
+.def result_temp=r24
+.def lcd_display = r25
+
+
+start:
+
+	clr digit_counter
+	clr input_num
+	clr result
+
+	ldi temp, 10
+	mov ten_register, temp
+
+	ser temp
+	out DDRC,temp
+	LDI TEMP, 0X00
+	OUT PORTC, TEMP
+
+	;SET SP
+	ldi temp, low(RAMEND)
+	out SPL, temp
+	ldi temp, high(RAMEND)
+	out SPH, temp
+	
+	;TURN ON LCD
+	ser temp;SET AS OUTPUT PORT
+	out DDRF, temp
+	out DDRA, temp
+	;SHOW NOT THING
+	clr temp
+	out PORTF, temp
+	out PORTA, temp
+
+	;set up display	
+	do_lcd_command 0b00111000 ; 2x5x7
+	rcall sleep_5ms
+	do_lcd_command 0b00111000 ; 2x5x7
+	rcall sleep_1ms
+	do_lcd_command 0b00111000 ; 2x5x7
+	do_lcd_command 0b00111000 ; 2x5x7
+	do_lcd_command 0b00001000 ; display off?
+	do_lcd_command 0b00000001 ; clear display
+	do_lcd_command 0b00000110 ; increment, no display shift
+	do_lcd_command 0b00001110 ; Cursor on, bar, no blink
+	do_lcd_command 0b10101000;CHANGE THE DD RAM ADDRESS to second line
+
+
+
+call_read_key:
+	RCALL READ_KEY
+RJMP call_read_key
+
+HALT:
+ RJMP HALT
+
+read_key:
+   ; 
+	ldi temp, ROWIN
+	sts DDRL,temp
+	ldi temp, COLOUT;ROW IS HIGH
+	sts PORTL, temp
+	;DELAY
+	CLR TEMP
+d1:
+	INC TEMP;
+	NOP
+	NOP
+	CPI TEMP,255
+	BRNE D1
+
+row_check:
+    ldS temp,PINL
+    ORi temp,COLMSK
+	;OUT PORTC, TEMP
+	cpi temp, 0B11111111
+	BREQ row_check;NO ROWS HAS BEEN PRESSED
+	;OUT PORTC,TEMP
+	MOV ROW, TEMP
+	ldi temp, COLIN
+	sts DDRL,temp
+	ldi temp, ROWOUT
+	sts PORTL, temp
+	;DELAY
+	CLR TEMP
+d2:
+	INC TEMP;
+	NOP
+	NOP
+	CPI TEMP,255
+	BRNE d2
+	ldS temp,PINL
+    ORi temp,ROWMSK
+	MOV COL, TEMP
+
+	AND ROW,COL
+	mov key,row
+	;OUT PORTc,key
+comparison:
+	clr temp
+	cpi key,0b01111110
+	breq jmp_plus
+	cpi key,0b01111101
+	breq jmp_minus
+	cpi key,0b01111011
+	breq jmp_multi
+	cpi key,0b01110111
+	breq jmp_divide
+	cpi key,0b11101110//lower bit is row
+	breq show1
+	cpi key,0b11011110
+	breq show2
+	cpi key,0b10111110
+	breq show3
+	cpi key,0b11101101
+	breq show4
+	cpi key,0b11011101
+	breq show5
+	cpi key,0b10111101
+	breq show6
+	cpi key,0b11101011
+	breq show7
+	cpi key,0b11011011
+	breq show8
+	cpi key,0b10111011
+	breq show9
+	cpi key,0b11010111
+	breq show0
+	cpi key,0b11100111
+	breq go_clean_screen
+	rjmp Lr
+jmp_plus: rjmp plus
+jmp_minus: rjmp minus
+jmp_multi: rjmp multi
+jmp_divide:rjmp divide
+show_pattern:
+	inc digit_counter
+	OUT PORTc, led
+	input_times_ten
+	add input_num,led
+	rjmp Lr
+show1:
+	ldi led,1
+	do_lcd_data 0b00110001
+	rjmp show_pattern
+show2:
+	do_lcd_data 0b00110010
+	ldi led,2
+	rjmp show_pattern
+show3:
+	 do_lcd_data 0b00110011
+	 ldi led,3
+	 rjmp show_pattern
+show4:
+	  do_lcd_data 0b00110100
+	 ldi led,4
+	 rjmp show_pattern
+ show5:
+	  do_lcd_data 0b00110101
+	 ldi led,5
+	 rjmp show_pattern
+ show6:
+	  do_lcd_data 0b00110110
+	 ldi led,6
+	 rjmp show_pattern
+ show7:
+	  do_lcd_data 0b00110111
+	 ldi led,7
+	 rjmp show_pattern
+ show8:
+	  do_lcd_data 0b00111000
+	 ldi led,8
+	 rjmp show_pattern
+ show9:
+	  do_lcd_data 0b00111001
+	 ldi led,9
+	 rjmp show_pattern
+ show0:
+	 ldi led,0
+	 cpi digit_counter,1
+	 brge check_zero
+	 do_lcd_data 0b00110000
+	 rjmp show_pattern
+go_clean_screen:
+	rjmp clean_screen
+ 
+check_zero:;
+	cpi input_num,0
+	breq go_pattern
+	do_lcd_data 0b00110000
+go_pattern:
+	rjmp show_pattern
+ clean_screen:
+	rjmp start
+ 
+plus:
+	add result,input_num
+	clr input_num
+	clr digit_counter
+	rjmp show_result
+minus:
+	sub result,input_num
+	clr input_num
+	clr digit_counter
+	rjmp show_result
+multi:
+	mul result,input_num
+	mov result,r0
+	clr input_num
+	clr digit_counter
+	rjmp show_result
+divide:
+	cpi input_num,0
+	breq lr;
+	cp result,input_num
+	brsh sub_by_input
+	mov result,temp
+	clr input_num
+	rjmp show_result
+sub_by_input:
+	sub result,input_num
+	inc temp
+	rjmp divide
+
+show_result:
+	do_lcd_command 0b00000001 ; clear display
+	;do_lcd_command 0b00000110 ; increment, no display shift
+	out PORTC,result
+	mov result_temp,result
+	ldi lcd_display,lcd_base
+	clr r26;result_ten_digit
+	clr r27;result_h_digit
+minus_100_loop:	
+	cpi result_temp,100
+	brsh sub_100
+show_100_digit:
+	cpi r27,1
+	brlt minus_10_loop
+	load_lcd_data lcd_display
+	ldi lcd_display,lcd_base
+
+minus_10_loop:
+	cpi result_temp,10
+	brsh sub_10
+show_10_digit:
+	cpi r26,0
+	brne display_10_digit
+	cpi r27,1
+	brge display_10_digit
+	rjmp directly_display
+display_10_digit:
+	load_lcd_data lcd_display
+	;clr result_digit
+	ldi lcd_display,lcd_base
+
+
+directly_display:	
+	ldi lcd_display,lcd_base
+	add lcd_display,result_temp
+	load_lcd_data lcd_display
+	do_lcd_command 0b10101000;CHANGE THE DD RAM ADDRESS
+	rjmp lr
+sub_10:
+	subi result_temp,10
+	inc lcd_display
+	inc r26
+	rjmp minus_10_loop
+sub_100:
+	subi result_temp,100
+	inc lcd_display
+	inc r27
+	rjmp minus_100_loop
+
+	
+Lr:;WHEN THE KEY IS PRESSED
+    ldS temp,PINL
+    ORi temp,0B00001111
+	;aOUT PORTC, TEMP
+	cpi temp, 0B11111111
+	BRNE LR
+
+	LDI TEMP, 0X00
+	OUT PORTc, TEMP
+
+
+RETI
+
+
+
+
+
+
+
+
+
+; LCD control
+
+
+.equ LCD_RS = 7
+.equ LCD_E = 6
+.equ LCD_RW = 5
+.equ LCD_BE = 4
+
+.macro lcd_set
+	sbi PORTA, @0
+.endmacro
+.macro lcd_clr
+	cbi PORTA, @0
+.endmacro
+
+;
+; Send a command to the LCD (r16)
+;
+
+lcd_command:
+	out PORTF, r16
+	rcall sleep_1ms
+	lcd_set LCD_E
+	rcall sleep_1ms
+	lcd_clr LCD_E
+	rcall sleep_1ms
+	ret
+
+lcd_data:
+	out PORTF, r16
+	lcd_set LCD_RS
+	rcall sleep_1ms
+	lcd_set LCD_E
+	rcall sleep_1ms
+	lcd_clr LCD_E
+	rcall sleep_1ms
+	lcd_clr LCD_RS
+	ret
+
+lcd_wait:
+	push r16
+	clr r16
+	out DDRF, r16
+	out PORTF, r16
+	lcd_set LCD_RW
+lcd_wait_loop:
+	rcall sleep_1ms
+	lcd_set LCD_E
+	rcall sleep_1ms
+	in r16, PINF
+	lcd_clr LCD_E
+	sbrc r16, 7
+	rjmp lcd_wait_loop
+	lcd_clr LCD_RW
+	ser r16
+	out DDRF, r16
+	pop r16
+	ret
+
+.equ F_CPU = 16000000
+.equ DELAY_1MS = F_CPU / 4 / 1000 - 4
+; 4 cycles per iteration - setup/call-return overhead
+
+sleep_1ms:
+	push r24
+	push r25
+	ldi r25, high(DELAY_1MS)
+	ldi r24, low(DELAY_1MS)
+delayloop_1ms:
+	sbiw r25:r24, 1
+	brne delayloop_1ms
+	pop r25
+	pop r24
+	ret
+
+sleep_5ms:
+	rcall sleep_1ms
+	rcall sleep_1ms
+	rcall sleep_1ms
+	rcall sleep_1ms
+	rcall sleep_1ms
+	ret

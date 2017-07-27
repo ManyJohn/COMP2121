@@ -1,0 +1,182 @@
+.include "m2560def.inc"
+.def temp = r16
+.def led = r17
+.def counter =r18
+.def keydown = r19
+.def flash_time = r20
+.def swap_temp =r21
+.macro clear
+	ldi YL,low(@0)
+	ldi YH,high(@0)
+	clr temp
+	st Y+,temp
+	st Y,temp
+.endmacro 
+
+
+.dseg
+mlsecond_Counter:
+	.byte 2
+second_Counter:
+.byte 2
+
+
+.cseg
+
+jmp start
+
+.org INT0addr
+	jmp INT0F
+.org INT1addr
+	jmp INT1F
+.org  OVF0addr
+	jmp Time0OVR
+INT0F:
+	push temp
+	in temp,SREG
+	push temp; save the current status
+
+	cpi keydown,1
+	breq endINT
+	lsl led
+	inc counter;count the numers of keydown
+	;out PORTC,led
+	ldi keydown,1
+	clear mlsecond_Counter
+	rjmp endINT
+INT1F:
+	push temp
+	in temp,SREG
+	push temp; save the current status
+
+	cpi keydown,1
+	breq endINT
+	ldi keydown,1
+	lsl led
+	inc led
+	;out PORTC,led
+	inc counter
+	clear mlsecond_Counter
+	rjmp endINT
+endINT:
+	pop temp
+	out SREG,temp
+	pop temp
+	reti
+
+Time0OVR:
+	push temp
+	in temp,SREG
+	push temp
+
+mlsecond_compare:
+	cpi keydown,1
+	brne second_compare;do nothing
+	lds r24, mlsecond_Counter
+	lds r25, mlsecond_Counter+1
+	adiw r24:r25,1
+	
+	;check 50milisecond
+	cpi r24,low(390);7812/20=390 but is not enough, we think the button is little bit disorder
+	ldi temp,high(390)
+	cpc r25,temp
+	brne not_fifty_mlsecond_yet
+	ldi keydown,0
+	clear mlsecond_Counter
+	
+second_compare:	
+	cpi counter,8;it grows from 0
+	brlt endTimer0OVR
+	ldi	keydown,1
+	;if counter==8
+	out PORTC,led
+	cpi flash_time,5
+	brge flash_done
+	lds r24,second_Counter
+	lds r25,second_Counter+1
+	adiw r24:r25,1
+	;check 1 second three time
+	cpi r24,low(7812);1 sec
+	ldi temp,high(7812)
+	cpc r25,temp
+	brne not_second_yet
+	mov swap_temp, led
+	mov led,r0
+	mov r0,swap_temp
+	out PORTC,led
+	inc flash_time
+	clear second_Counter
+
+	
+
+endTimer0OVR:
+	pop temp
+	out SREG,temp
+	pop temp
+	reti
+ 
+not_fifty_mlsecond_yet:
+	sts mlsecond_Counter,r24
+	sts mlsecond_Counter+1,r25
+	rjmp second_compare
+not_second_yet:
+	out PORTC,led;0b 0000 0000
+	sts second_Counter,r24
+	sts second_Counter+1,r25
+	rjmp endTimer0OVR
+
+ flash_done:
+	clr r0
+	clr led
+	out PORTC,led
+	clr counter
+	clr flash_time
+	clear second_Counter
+	rjmp endTimer0OVR
+
+
+start:
+clr r0
+clr swap_temp
+ldi temp,low(RAMEND)
+out SPL,temp
+ldi temp,high(RAMEND)
+out SPH, temp
+
+clr led;
+clr counter;
+
+ser temp
+out DDRC,temp
+out PORTC,led
+sei
+;setting button interupt
+ldi temp,(2<<ISC00)
+sts EICRA,temp
+in temp,EIMSK
+ori temp,(1<<INT0)
+out EIMSK, temp
+ sei
+
+ldi temp,(2<<ISC00)
+sts EICRA,temp
+in temp,EIMSK
+ori temp,(1<<INT1)
+out EIMSK, temp
+
+;setting timer
+ldi temp,0
+out TCCR0A,temp
+ldi temp,2;normal speed mod
+out TCCR0B,temp
+ldi temp,(1<<TOIE0);
+sts TIMSK0,temp 
+
+
+
+
+sei
+loop:
+rjmp loop
+
+

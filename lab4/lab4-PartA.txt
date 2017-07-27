@@ -1,0 +1,143 @@
+;
+; AssemblerApplication1.asm
+;
+; Created: 5/05/2017 6:32:21 PM
+ ;
+
+.include "m2560def.inc"
+; Replace with your application code
+.equ COLIN = 0b00001111
+.equ COLOUT = 0b00001111
+.equ ROWIN = 0b11110000
+.equ ROWOUT = 0b11110000
+.equ ROWMSK =  0b00001111
+.equ COLMSK = 0b11110000
+.def temp = r16
+.def row = r17
+.def col = r18
+.def key = r19
+.def led=r20
+
+start:
+	ser teMP
+	out DDRC,temp
+	LDI TEMP, 0X00
+	OUT PORTC, TEMP
+
+call_read_key:
+	RCALL READ_KEY
+RJMP call_read_key
+
+HALT:
+ RJMP HALT
+
+read_key:
+   ; 
+	ldi temp, ROWIN
+	sts DDRL,temp
+	ldi temp, COLOUT;ROW IS HIGH
+	sts PORTL, temp
+	;DELAY
+	CLR TEMP
+d1:
+	INC TEMP;
+	NOP
+	NOP
+	CPI TEMP,255
+	BRNE D1
+
+row_check:
+    ldS temp,PINL
+    ORi temp,COLMSK
+	;OUT PORTC, TEMP
+	cpi temp, 0B11111111
+	BREQ row_check;NO ROWS HAS BEEN PRESSED
+	OUT PORTC,TEMP
+	MOV ROW, TEMP
+	ldi temp, COLIN
+	sts DDRL,temp
+	ldi temp, ROWOUT
+	sts PORTL, temp
+	;DELAY
+	CLR TEMP
+d2:
+	INC TEMP;
+	NOP
+	NOP
+	CPI TEMP,255
+	BRNE d2
+	ldS temp,PINL
+    ORi temp,ROWMSK
+	MOV COL, TEMP
+
+	AND ROW,COL
+	mov key,row
+	;OUT PORTc,key
+comparison:
+	cpi key,0b11101110//lower bit is row
+	breq show1
+	cpi key,0b11011110
+	breq show2
+	cpi key,0b10111110
+	breq show3
+	cpi key,0b11101101
+	breq show4
+	cpi key,0b11011101
+	breq show5
+	cpi key,0b10111101
+	breq show6
+	cpi key,0b11101011
+	breq show7
+	cpi key,0b11011011
+	breq show8
+	cpi key,0b10111011
+	breq show9
+	rjmp Lr
+
+ show_pattern:
+	OUT PORTc, led
+	rjmp Lr
+show1:
+ ldi led,1
+ rjmp show_pattern
+ show2:
+ ldi led,2
+ rjmp show_pattern
+ show3:
+ ldi led,3
+ rjmp show_pattern
+ show4:
+ ldi led,4
+ rjmp show_pattern
+ show5:
+ ldi led,5
+ rjmp show_pattern
+ show6:
+ ldi led,6
+ rjmp show_pattern
+ show7:
+ ldi led,7
+ rjmp show_pattern
+ show8:
+ ldi led,8
+ rjmp show_pattern
+ show9:
+ ldi led,9
+ rjmp show_pattern
+	
+	
+Lr:;WHEN THE KEY IS PRESSED
+    ldS temp,PINL
+    ORi temp,0B00001111
+	;aOUT PORTC, TEMP
+	cpi temp, 0B11111111
+	BRNE LR
+
+	LDI TEMP, 0X00
+	OUT PORTc, TEMP
+
+
+RETI
+
+
+S

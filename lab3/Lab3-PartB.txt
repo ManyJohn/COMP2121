@@ -1,0 +1,87 @@
+;AssemblerApplication1.asm
+;
+; Created: 12/04/2017 1:27:25 PM
+; Author : Comp2121
+;
+.include "m2560def.inc"
+.equ pattern = 0x00F0
+.def temp = r16
+.def ledH = r18 
+.def ledL = r17
+.def one =r20
+;setting the interupter
+.macro clear_timer
+	ldi YL,LOW(@0)
+	ldi YH,HIGH(@0)
+	clr temp
+	st Y+,temp
+	st Y, temp
+.endmacro
+
+.dseg
+icounter: .byte 2 
+
+.cseg
+rjmp start
+.org OVF0addr
+	jmp Timer0OVERF
+
+Timer0OVERF:
+	in temp, SREG
+	push temp
+	push YL
+	push YH
+	push r24 ;counter increment
+	push r25
+
+	lds r24,icounter;low
+	lds r25,icounter+1
+	adiw r24:r25,1
+	cpi r24,low(7812)
+	ldi temp,HIGH(7812)
+	cpc r25, temp
+	brne NotsecoundYet
+	lsr ledL
+	ror ledH
+	brcs add_carry_bite;if the carry is setted
+	out PORTC, ledL
+	rjmp NotsecoundYet
+	
+add_carry_bite:	
+add ledL,one
+out PORTC, ledL
+rjmp NotsecoundYet	
+
+NotsecoundYet:
+sts icounter+1,r25;low
+sts icounter,r24
+
+end_interupt:	
+ ;counter increment
+	pop r25
+	pop r24
+	pop YH
+	pop YL
+	pop temp
+	out SREG,temp
+
+reti	
+
+; Replace with your application code                
+start:
+	ldi one,0b10000000
+	ldi ledL,low(pattern)
+	ldi ledH,high(pattern)
+	ser temp
+	out DDRC, temp;set it to output port 
+	out PORTC, ledL; show the lower bite only
+	
+	clear_timer icounter
+	ldi temp,0b00000001;normal clock mod
+	out TCCR0B,temp
+	ldi temp,(1<<TOIE0);interupt mod
+	sts TIMSK0,temp
+	sei
+
+end_loop: 
+	jmp end_loop
